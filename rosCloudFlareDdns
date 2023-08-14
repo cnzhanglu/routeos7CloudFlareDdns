@@ -12,8 +12,9 @@
 # - 如果需要，启用CFDebug - 它将打印一些信息到日志中                    #
 # - 如果你的公网没有公网IP，你可以打开CFcloud开关                        #
 # - 将脚本放在 /system scripts 并且允许 read,write,ftp 这三个权限即可   #
-# - 本脚本lcry在RouterOS V7.10.2版本上测试通过，可以放心试用               #
+# - 本脚本lcry在RouterOS V7.6版本上测试通过，可以放心试用               #
 # - 配合scheduler调度器可以达到IP地址变化自动更新解析记录                #
+# - 必须要在RouterOS 6.44beta75 版本以上本脚本才可能支持                #
 #                                                                       #
 #              Credits for Samuel Tegenfeldt, CC BY-SA 3.0              #
 #                        Modified by kiler129                           #
@@ -22,7 +23,7 @@
 #                        Modified by mike6715b                          #
 #                        Sinicization by lcry                           #
 #                                                                       #
-#                    2023年8月13测试通过并正常工作                       #
+#                    2022年12月24测试通过并正常工作                       #
 #########################################################################
 
 ################# CloudFlare 变量 #################
@@ -56,8 +57,8 @@
 
 # 临时文件名
 :global TMPfilename ""
-:set TMPfilename "ddns.tmp.txt"
-:set TMPfilename (CFdomain, TMPfilename)
+:set TMPfilename ($CFdomain . "-" . "ddns.tmp.txt");
+:log info $TMPfilename;
 
 #########################################################################
 ########################  下面的内容请勿修改 ############################
@@ -83,15 +84,16 @@
     :set WANip [:pick $currentIP 0 [:find $currentIP "/"]];
 };
 
-:if ([/file find name=$TMPfilename] = "") do={
-    :log error "Unable to find the file that records the previous public IP address, automatically created..."
+:if ([/file find name="$TMPfilename"] = "") do={
+    :log error "找不到记录以前自动创建的公用IP地址的文件..."
     :set previousIP $WANip;
-    :execute script=":put $WANip" file="ddns.tmp";
-    :log info ("CF: Starting to update parsing records, setting $CFDomain = $WANip")
+    :execute script=":put $WANip" file="$TMPfilename";
+    :log info "$TMPfilename";
+    :log info ("CF: 正在开始更新分析记录，正在设置 $CFDomain = $WANip")
     /tool fetch http-method=put mode=https output=none url="$CFurl" http-header-field="X-Auth-Email:$CFemail,X-Auth-Key:$CFtkn,content-type:application/json" http-data="{\"type\":\"$CFrecordType\",\"name\":\"$CFdomain\",\"ttl\":$CFrecordTTL,\"content\":\"$WANip\"}"
-    :error message="Could not find the file for the previous public IP address"
+    :error message="找不到以前公用IP地址的文件"
 } else={
-    :if ( [/file get [/file find name=$TMPfilename] size] > 0 ) do={ 
+    :if ( [/file get [/file find name="$TMPfilename"] size] > 0 ) do={ 
     :global content [/file get [/file find name="$TMPfilename"] contents] ;
     :global contentLen [ :len $content ] ;  
     :global lineEnd 0;
@@ -110,23 +112,23 @@
 
 ######## 将调试信息写入日志 #################
 :if ($CFDebug = "true") do={
- :log info ("CF: domain name = $CFdomain")
- :log info ("CF: Previous resolved IP address = $previousIP")
- :log info ("CF: Current IP address = $currentIP")
- :log info ("CF: Public IP = $WANip")
- :log info ("CF: Request CFurl = $CFurl&content=$WANip")
+ :log info ("CF: 解析域名 = $CFdomain")
+ :log info ("CF: 域名解析IPv4 = $previousIP")
+ :log info ("CF: 使用IP = $currentIP")
+ :log info ("CF: 当前公网IPv4 = $WANip")
+ :log info ("CF: 使用的API地址v4 = $CFurl&content=$WANip")
  :log info ("CF: Execute Command = \"/tool fetch http-method=put mode=https url=\"$CFurl\" http-header-field="X-Auth-Email:$CFemail,X-Auth-Key:$CFtkn,content-type:application/json" output=none http-data=\"{\"type\":\"$CFrecordType\",\"name\":\"$CFdomain\",\"ttl\":$CFrecordTTL,\"content\":\"$WANip\"}\"")
 };
   
 ######## 比较并更新记录 #####
 :if ($previousIP != $WANip) do={
- :log info ("CF: Starting to update parsing records, setting $CFDomain = $WANip")
+ :log info ("CF: 正在更新 IPv4 解析地址, setting $CFDomain = $WANip")
  /tool fetch http-method=put mode=https url="$CFurl" http-header-field="X-Auth-Email:$CFemail,X-Auth-Key:$CFtkn,content-type:application/json" output=none http-data="{\"type\":\"$CFrecordType\",\"name\":\"$CFdomain\",\"ttl\":$CFrecordTTL,\"content\":\"$WANip\"}"
  /ip dns cache flush
-    :if ( [/file get [/file find name=$TMPfilename] size] > 0 ) do={
-        /file remove $TMPfilename
-        :execute script=":put $WANip" file="ddns.tmp"
+    :if ( [/file get [/file find name="$TMPfilename"] size] > 0 ) do={
+        /file remove "$TMPfilename"
+        :execute script=":put $WANip" file="$TMPfilename"
     }
 } else={
- :log info "CF: No changes have occurred, no updates needed!"
+ :log info "CF: IPv4公网地址与解析的地址匹配无需更新！"
 }
