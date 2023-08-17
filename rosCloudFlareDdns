@@ -33,7 +33,7 @@
 :local CFcloud "false"
 
 # 修改为有公网IP的接口名称
-:global WANInterface "pppoe-out1"
+:local WANInterface "pppoe-out1"
 
 # 修改为你要ddns的域名，若是二级域名，这里填写完整的二级域名
 :local CFdomain ""
@@ -56,7 +56,7 @@
 :set CFrecordTTL "120"
 
 # 临时文件名
-:global TMPfilename ""
+:local TMPfilename ""
 :set TMPfilename ($CFdomain . "-" . "ddns.tmp.txt");
 :log info $TMPfilename;
 
@@ -68,7 +68,7 @@
 
 ################# 内部变量 variables #################
 :local previousIP ""
-:global WANip ""
+:local WANip ""
 
 ################# 构建 CF API Url (v4) #################
 :local CFurl "https://api.cloudflare.com/client/v4/zones/"
@@ -94,11 +94,11 @@
     :error message="找不到以前公用IP地址的文件"
 } else={
     :if ( [/file get [/file find name="$TMPfilename"] size] > 0 ) do={ 
-    :global content [/file get [/file find name="$TMPfilename"] contents] ;
-    :global contentLen [ :len $content ] ;  
-    :global lineEnd 0;
-    :global line "";
-    :global lastEnd 0;   
+    :local content [/file get [/file find name="$TMPfilename"] contents] ;
+    :local contentLen [ :len $content ] ;  
+    :local lineEnd 0;
+    :local line "";
+    :local lastEnd 0;   
             :set lineEnd [:find $content "\n" $lastEnd ] ;
             :set line [:pick $content $lastEnd $lineEnd] ;
             :set lastEnd ( $lineEnd + 1 ) ;   
