@@ -12,7 +12,7 @@
 # - 如果需要，启用CFDebug - 它将打印一些信息到日志中                    #
 # - 如果你的公网没有公网IP，你可以打开CFcloud开关                        #
 # - 将脚本放在 /system scripts 并且允许 read,write,ftp 这三个权限即可   #
-# - 本脚本lcry在RouterOS V7.6版本上测试通过，可以放心试用               #
+# - 已更新为兼容 RouterOS V7.24 的文件写入语法                         #
 # - 配合scheduler调度器可以达到IP地址变化自动更新解析记录                #
 # - 必须要在RouterOS 6.44beta75 版本以上本脚本才可能支持                #
 #                                                                       #
@@ -28,7 +28,7 @@
 
 ################# CloudFlare 变量 #################
 # 是否开启debug调试模式
-:local CFDebug "ture"
+:local CFDebug "true"
 # 是否开启CFcloud功能
 :local CFcloud "false"
 
@@ -64,11 +64,12 @@
 ########################  下面的内容请勿修改 ############################
 #########################################################################
 
-:log info "开始更新解析记录 $CFDomain ..."
+:log info "开始更新解析记录 $CFdomain ..."
 
 ################# 内部变量 variables #################
 :local previousIP ""
 :local WANip ""
+:local currentIP ""
 
 ################# 构建 CF API Url (v4) #################
 :local CFurl "https://api.cloudflare.com/client/v4/zones/"
@@ -80,18 +81,17 @@
 };
 
 :if ($CFcloud = "false") do={
-    :local currentIP [/ip address get [/ip address find interface=$WANInterface ] address];
+    :set currentIP [/ip address get [/ip address find interface=$WANInterface ] address];
     :set WANip [:pick $currentIP 0 [:find $currentIP "/"]];
 };
 
 :if ([/file find name="$TMPfilename"] = "") do={
     :log error "找不到记录以前自动创建的公用IP地址的文件..."
     :set previousIP $WANip;
-    :execute script=":put $WANip" file="$TMPfilename";
+    /file add name=$TMPfilename contents=$WANip;
     :log info "$TMPfilename";
-    :log info ("CF: 正在开始更新分析记录，正在设置 $CFDomain = $WANip")
+    :log info ("CF: 正在开始更新分析记录，正在设置 $CFdomain = $WANip")
     /tool fetch http-method=put mode=https output=none url="$CFurl" http-header-field="X-Auth-Email:$CFemail,X-Auth-Key:$CFtkn,content-type:application/json" http-data="{\"type\":\"$CFrecordType\",\"name\":\"$CFdomain\",\"ttl\":$CFrecordTTL,\"content\":\"$WANip\"}"
-    :error message="找不到以前公用IP地址的文件"
 } else={
     :if ( [/file get [/file find name="$TMPfilename"] size] > 0 ) do={ 
     :local content [/file get [/file find name="$TMPfilename"] contents] ;
@@ -117,17 +117,16 @@
  :log info ("CF: 使用IP = $currentIP")
  :log info ("CF: 当前公网IPv4 = $WANip")
  :log info ("CF: 使用的API地址v4 = $CFurl&content=$WANip")
- :log info ("CF: Execute Command = \"/tool fetch http-method=put mode=https url=\"$CFurl\" http-header-field="X-Auth-Email:$CFemail,X-Auth-Key:$CFtkn,content-type:application/json" output=none http-data=\"{\"type\":\"$CFrecordType\",\"name\":\"$CFdomain\",\"ttl\":$CFrecordTTL,\"content\":\"$WANip\"}\"")
+ :log info ("CF: 请求方法 = PUT")
 };
   
 ######## 比较并更新记录 #####
 :if ($previousIP != $WANip) do={
- :log info ("CF: 正在更新 IPv4 解析地址, setting $CFDomain = $WANip")
+ :log info ("CF: 正在更新 IPv4 解析地址, setting $CFdomain = $WANip")
  /tool fetch http-method=put mode=https url="$CFurl" http-header-field="X-Auth-Email:$CFemail,X-Auth-Key:$CFtkn,content-type:application/json" output=none http-data="{\"type\":\"$CFrecordType\",\"name\":\"$CFdomain\",\"ttl\":$CFrecordTTL,\"content\":\"$WANip\"}"
  /ip dns cache flush
     :if ( [/file get [/file find name="$TMPfilename"] size] > 0 ) do={
-        /file remove "$TMPfilename"
-        :execute script=":put $WANip" file="$TMPfilename"
+        /file set [/file find name=$TMPfilename] contents=$WANip
     }
 } else={
  :log info "CF: IPv4公网地址与解析的地址匹配无需更新！"
